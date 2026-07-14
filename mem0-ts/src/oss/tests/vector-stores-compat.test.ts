@@ -14,6 +14,7 @@
 import * as fs from "fs";
 import * as path from "path";
 import * as os from "os";
+import { expectVectorStoreResultContract } from "./vector-store-result-contract";
 
 jest.setTimeout(15000);
 
@@ -139,6 +140,49 @@ describe("MemoryVectorStore – full backward compat", () => {
 
     const searchResults = await store.search(vec, 1);
     expect(searchResults.length).toBe(1);
+  });
+
+  it("returns a canonical payload from get, list, and search", async () => {
+    const store = new MemoryVectorStore({
+      collectionName: "test",
+      dimension: 4,
+      dbPath: path.join(tmpDir, "vs.db"),
+    });
+    const vector = [1, 0, 0, 0];
+    const storedPayload = {
+      data: "prefers pour-over coffee",
+      hash: "hash-1",
+      createdAt: "2026-07-14T10:00:00.000Z",
+      updatedAt: "2026-07-14T11:00:00.000Z",
+      userId: "user-1",
+      agentId: "agent-1",
+      runId: "run-1",
+      source: "conversation",
+    };
+    const expectedPayload = {
+      data: storedPayload.data,
+      hash: storedPayload.hash,
+      createdAt: storedPayload.createdAt,
+      updatedAt: storedPayload.updatedAt,
+      user_id: "user-1",
+      agent_id: "agent-1",
+      run_id: "run-1",
+      source: storedPayload.source,
+    };
+
+    await store.insert([vector], ["memory-1"], [storedPayload]);
+
+    const get = await store.get("memory-1");
+    const [list] = await store.list({ user_id: "user-1" });
+    const search = await store.search(vector, 1, { user_id: "user-1" });
+
+    expectVectorStoreResultContract({
+      id: "memory-1",
+      payload: expectedPayload,
+      get,
+      list,
+      search,
+    });
   });
 
   it("rejects dimension mismatch on insert", async () => {
